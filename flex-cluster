@@ -8,6 +8,15 @@ import geni.rspec.pg as PG
 import geni.rspec.igext as IG
 from lxml import etree as ET
 
+# yapf: disable
+disk_images = {
+	("arm", "ubuntu"): "urn:publicid:IDN+utah.cloudlab.us+image+emulab-ops:UBUNTU16-64-ARM",
+	("x86_64", "centos"): "urn:publicid:IDN+emulab.net+image+emulab-ops:CENTOS7-64-STD",
+	("x86_64", "ubuntu"): "urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU16-64-STD",
+	("x86_64", "ubuntu-18"): "urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-STD",
+}
+# yapf: enable
+
 # Create our in-memory model of the RSpec -- the resources we're going to request
 # in our experiment, and their configuration.
 rspec = PG.Request()
@@ -30,11 +39,14 @@ pc.defineParameter(
 )
 
 pc.defineParameter(
-	"OSType",
+	"osType",
 	"OS Type",
 	portal.ParameterType.STRING,
-	"ubuntu", [("centos", "CentOS 7.1"), ("ubuntu", "Ubuntu 16.04")],
-	longDescription="Choose either CentOS 7.1 or Ubuntu for the OS distribution."
+	"ubuntu-18", [
+		("centos", "CentOS 7.1"), ("ubuntu", "Ubuntu 16.04"),
+		("ubuntu-18", "Ubuntu 18.04")
+	],
+	longDescription="Choose the OS distribution."
 )
 
 pc.defineParameter(
@@ -42,12 +54,15 @@ pc.defineParameter(
 	"Hardware Type",
 	portal.ParameterType.STRING,
 	"c220g1", [
-		("c220g1", "c220g1 (Wisc)"),
-		("c220g2", "c220g2 (Wisc)"),
-		("c6320", "c6320 (Clemson)"),
-		("c8220", "c8220 (Clemson)"),
-		("m400", "m400 (Utah)"),
-		("m510", "m510 (Utah)"),
+		("c220g1", "c220g1: 2x8 128GB (Wisc)"),
+		("c220g2", "c220g2: 2x10 160GB (Wisc)"),
+		("c220g5", "c220g5: 2x10 192GB (Wisc)"),
+		("c8220", "c8220: 2x10 256GB (Clemson)"),
+		("c6320", "c6320: 2x14 256GB (Clemson)"),
+		("c6420", "c6420: 2x16 384GB (Clemson)"),
+		("m400", "m400: 1x8 64GB arm64 (Utah)"),
+		("m510", "m510: 1x8 64GB (Utah)"),
+		("xl170", "xl170: 1x10 64GB (Utah)"),
 	],
 	longDescription="Select hardware from the intended cluster"
 )
@@ -86,10 +101,12 @@ params = pc.bindParameters()
 
 # Verify our parameters and throw errors.
 
-if params.OSType == 'centos' and params.archType == 'arm':
+chosenDiskImage = disk_images.get((params.archType, params.osType), "")
+
+if not chosenDiskImage:
 	perr = portal.ParameterError(
-		"ARM architecture type is not compatible with CentOS disk image. Please choose Ubuntu with ARM architecture type.",
-		['OSType', 'archType']
+		"architecture type is not compatible with disk image.",
+		['osType', 'archType']
 	)
 	pc.reportError(perr)
 
@@ -110,20 +127,6 @@ tour = IG.Tour()
 tour.Description(IG.Tour.TEXT, tourDescription)
 tour.Instructions(IG.Tour.MARKDOWN, tourInstructions)
 rspec.addTour(tour)
-
-# Construct the disk image URNs we're going to set the various nodes to load.
-
-x86_ubuntu_disk_image = 'urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU16-64-STD'
-x86_centos_disk_image = 'urn:publicid:IDN+emulab.net+image+emulab-ops:CENTOS71-64-STD'
-arm_disk_image = 'urn:publicid:IDN+utah.cloudlab.us+image+emulab-ops:UBUNTU16-64-ARM'
-
-if params.OSType == 'centos':
-	chosenDiskImage = x86_centos_disk_image
-elif params.OSType == 'ubuntu':
-	if params.archType == 'x86_64':
-		chosenDiskImage = x86_ubuntu_disk_image
-	elif params.archType == 'arm':
-		chosenDiskImage = arm_disk_image
 
 lnk = PG.LAN()
 if not params.fullBW:
